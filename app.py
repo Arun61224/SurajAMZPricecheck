@@ -17,15 +17,37 @@ def get_amazon_price(asin):
     try:
         response = scraper.get(url)
         
-        # 200 means success, 500/503 means blocked
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, "html.parser")
-            price_element = soup.find("span", {"class": "a-price-whole"})
+            price = None
             
+            # --- Check 1: Standard Price Class ---
+            price_element = soup.find("span", {"class": "a-price-whole"})
             if price_element:
-                return price_element.text.strip().replace(".", "")
+                price = price_element.text.strip().replace(".", "")
+            
+            # --- Check 2: Core Price Display (Agar Check 1 fail ho jaye) ---
+            if not price:
+                core_price_div = soup.find("div", {"id": "corePriceDisplay_desktop_feature_div"})
+                if core_price_div:
+                    offscreen = core_price_div.find("span", {"class": "a-offscreen"})
+                    if offscreen:
+                        price = offscreen.text.strip().replace("₹", "").replace(",", "")
+                        
+            # --- Check 3: Apex Desktop Block (Naya Amazon Layout) ---
+            if not price:
+                apex_price = soup.find("div", {"id": "apex_desktop"})
+                if apex_price:
+                    whole = apex_price.find("span", {"class": "a-price-whole"})
+                    if whole:
+                        price = whole.text.strip().replace(".", "")
+            
+            # Final Return
+            if price:
+                return price
             else:
-                return "Out of Stock / Not Found"
+                return "Price Class Not Found"
+                
         else:
             return f"Blocked ({response.status_code})"
     except Exception as e:
@@ -58,11 +80,10 @@ if uploaded_file is not None:
                 clean_asin = str(asin).strip()
                 status_text.text(f"Fetching price for {clean_asin} ({i+1}/{total_items})...")
                 
-                # Fetch price using cloudscraper
+                # Naye function se price nikalna
                 price = get_amazon_price(clean_asin)
                 prices.append(price)
                 
-                # Anti-block delay (Badhakar 4 seconds kar diya hai safe rehne ke liye)
                 time.sleep(4) 
                 
                 progress_bar.progress((i + 1) / total_items)
@@ -70,10 +91,8 @@ if uploaded_file is not None:
             status_text.text("✅ Data Fetching Complete!")
             df['Fetched Price (₹)'] = prices
             
-            # Show Data
             st.dataframe(df)
             
-            # Download Button
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Download Result CSV",
