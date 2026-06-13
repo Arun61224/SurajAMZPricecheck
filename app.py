@@ -2,73 +2,64 @@ import streamlit as st
 import pandas as pd
 from bs4 import BeautifulSoup
 import time
-import cloudscraper
+import requests
+
+# ScraperAPI integration
+API_KEY = "YAHAN_APNI_SCRAPERAPI_KEY_DAALEIN" # <-- Apni API Key yahan paste karein
 
 def get_amazon_price(asin):
-    url = f"https://www.amazon.in/dp/{asin}"
+    amazon_url = f"https://www.amazon.in/dp/{asin}"
     
-    scraper = cloudscraper.create_scraper(browser={
-        'browser': 'chrome',
-        'platform': 'windows',
-        'desktop': True
-    })
+    # ScraperAPI URL - Ye Amazon ko lagega ki alag-alag real laptops se request aa rahi hai
+    payload = {
+        'api_key': API_KEY, 
+        'url': amazon_url, 
+        'country_code': 'in', # Indian proxy ke liye
+        'render': 'true' # Javascript load karne ke liye (Apparel prices ke liye zaroori)
+    }
     
     try:
-        response = scraper.get(url)
+        response = requests.get('http://api.scraperapi.com', params=payload)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, "html.parser")
             price = None
             
-            # Check 1
+            # Basic Price Checks
             price_element = soup.find("span", {"class": "a-price-whole"})
             if price_element:
                 price = price_element.text.strip().replace(".", "")
             
-            # Check 2
             if not price:
                 core_price_div = soup.find("div", {"id": "corePriceDisplay_desktop_feature_div"})
                 if core_price_div:
                     offscreen = core_price_div.find("span", {"class": "a-offscreen"})
                     if offscreen:
                         price = offscreen.text.strip().replace("₹", "").replace(",", "")
-                        
-            # Check 3
-            if not price:
-                apex_price = soup.find("div", {"id": "apex_desktop"})
-                if apex_price:
-                    whole = apex_price.find("span", {"class": "a-price-whole"})
-                    if whole:
-                        price = whole.text.strip().replace(".", "")
             
             if price:
                 return price
             else:
-                return "Price Class Not Found"
+                return "Price Not Found (Shayad Size Select Karna Pade)"
                 
         else:
-            return f"Blocked ({response.status_code})"
+            return f"API Error ({response.status_code})"
     except Exception as e:
-        return "Error"
+        return "Connection Error"
 
 # --- UI Setup ---
-st.set_page_config(page_title="Amazon Bulk Price Fetcher", layout="centered")
-st.title("📦 Amazon Bulk ASIN Price Fetcher")
-st.markdown("Apni CSV file upload karein jisme **`ASIN`** naam ka ek column ho.")
+st.set_page_config(page_title="Amazon Bulk Price Fetcher PRO", layout="centered")
+st.title("📦 Amazon Bulk ASIN Price Fetcher (PRO)")
+st.markdown("ScraperAPI Powered - Bypasses Amazon CAPTCHA")
 
-# File Uploader
 uploaded_file = st.file_uploader("Upload Template (CSV)", type=["csv"])
 
 if uploaded_file is not None:
-    # CSV Load karna
     df = pd.read_csv(uploaded_file)
-    
-    # 🔴 SMART FIX: Har column name se extra space hatana aur UPPERCASE karna
     df.columns = df.columns.str.strip().str.upper()
     
     if 'ASIN' not in df.columns:
         st.error("❌ Uploaded file mein 'ASIN' column nahi mila.")
-        st.warning(f"Aapki CSV mein ye columns mile hain: {', '.join(df.columns)}")
     else:
         st.info(f"✅ Total ASINs found: {len(df)}")
         
@@ -86,7 +77,8 @@ if uploaded_file is not None:
                 price = get_amazon_price(clean_asin)
                 prices.append(price)
                 
-                time.sleep(4) 
+                # ScraperAPI ke sath zyada delay ki zaroorat nahi hoti
+                time.sleep(1) 
                 progress_bar.progress((i + 1) / total_items)
             
             status_text.text("✅ Data Fetching Complete!")
@@ -98,6 +90,6 @@ if uploaded_file is not None:
             st.download_button(
                 label="📥 Download Result CSV",
                 data=csv,
-                file_name="amazon_prices_result.csv",
+                file_name="amazon_prices_result_pro.csv",
                 mime="text/csv",
             )
