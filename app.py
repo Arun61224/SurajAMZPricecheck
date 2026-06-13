@@ -7,7 +7,6 @@ import cloudscraper
 def get_amazon_price(asin):
     url = f"https://www.amazon.in/dp/{asin}"
     
-    # Cloudscraper bot-protection ko bypass karne ke liye
     scraper = cloudscraper.create_scraper(browser={
         'browser': 'chrome',
         'platform': 'windows',
@@ -21,12 +20,12 @@ def get_amazon_price(asin):
             soup = BeautifulSoup(response.content, "html.parser")
             price = None
             
-            # --- Check 1: Standard Price Class ---
+            # Check 1
             price_element = soup.find("span", {"class": "a-price-whole"})
             if price_element:
                 price = price_element.text.strip().replace(".", "")
             
-            # --- Check 2: Core Price Display (Agar Check 1 fail ho jaye) ---
+            # Check 2
             if not price:
                 core_price_div = soup.find("div", {"id": "corePriceDisplay_desktop_feature_div"})
                 if core_price_div:
@@ -34,7 +33,7 @@ def get_amazon_price(asin):
                     if offscreen:
                         price = offscreen.text.strip().replace("₹", "").replace(",", "")
                         
-            # --- Check 3: Apex Desktop Block (Naya Amazon Layout) ---
+            # Check 3
             if not price:
                 apex_price = soup.find("div", {"id": "apex_desktop"})
                 if apex_price:
@@ -42,7 +41,6 @@ def get_amazon_price(asin):
                     if whole:
                         price = whole.text.strip().replace(".", "")
             
-            # Final Return
             if price:
                 return price
             else:
@@ -62,10 +60,15 @@ st.markdown("Apni CSV file upload karein jisme **`ASIN`** naam ka ek column ho."
 uploaded_file = st.file_uploader("Upload Template (CSV)", type=["csv"])
 
 if uploaded_file is not None:
+    # CSV Load karna
     df = pd.read_csv(uploaded_file)
     
+    # 🔴 SMART FIX: Har column name se extra space hatana aur UPPERCASE karna
+    df.columns = df.columns.str.strip().str.upper()
+    
     if 'ASIN' not in df.columns:
-        st.error("❌ Uploaded file mein 'ASIN' column nahi mila. Kripya CSV check karein.")
+        st.error("❌ Uploaded file mein 'ASIN' column nahi mila.")
+        st.warning(f"Aapki CSV mein ye columns mile hain: {', '.join(df.columns)}")
     else:
         st.info(f"✅ Total ASINs found: {len(df)}")
         
@@ -80,12 +83,10 @@ if uploaded_file is not None:
                 clean_asin = str(asin).strip()
                 status_text.text(f"Fetching price for {clean_asin} ({i+1}/{total_items})...")
                 
-                # Naye function se price nikalna
                 price = get_amazon_price(clean_asin)
                 prices.append(price)
                 
                 time.sleep(4) 
-                
                 progress_bar.progress((i + 1) / total_items)
             
             status_text.text("✅ Data Fetching Complete!")
