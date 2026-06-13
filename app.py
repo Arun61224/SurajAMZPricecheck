@@ -1,21 +1,23 @@
 import streamlit as st
 import pandas as pd
-import requests
 from bs4 import BeautifulSoup
 import time
+import cloudscraper
 
 def get_amazon_price(asin):
     url = f"https://www.amazon.in/dp/{asin}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Connection": "keep-alive"
-    }
+    
+    # Cloudscraper bot-protection ko bypass karne ke liye
+    scraper = cloudscraper.create_scraper(browser={
+        'browser': 'chrome',
+        'platform': 'windows',
+        'desktop': True
+    })
     
     try:
-        response = requests.get(url, headers=headers)
+        response = scraper.get(url)
+        
+        # 200 means success, 500/503 means blocked
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, "html.parser")
             price_element = soup.find("span", {"class": "a-price-whole"})
@@ -23,7 +25,7 @@ def get_amazon_price(asin):
             if price_element:
                 return price_element.text.strip().replace(".", "")
             else:
-                return "Not Found/Out of Stock"
+                return "Out of Stock / Not Found"
         else:
             return f"Blocked ({response.status_code})"
     except Exception as e:
@@ -56,12 +58,12 @@ if uploaded_file is not None:
                 clean_asin = str(asin).strip()
                 status_text.text(f"Fetching price for {clean_asin} ({i+1}/{total_items})...")
                 
-                # Fetch price
+                # Fetch price using cloudscraper
                 price = get_amazon_price(clean_asin)
                 prices.append(price)
                 
-                # Anti-block delay (2 seconds)
-                time.sleep(2) 
+                # Anti-block delay (Badhakar 4 seconds kar diya hai safe rehne ke liye)
+                time.sleep(4) 
                 
                 progress_bar.progress((i + 1) / total_items)
             
